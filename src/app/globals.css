@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 248 250 252;
+  --foreground: 15 23 42;
+  --motion-standard: 180ms;
+  --motion-fast: 150ms;
+  --motion-slow: 220ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --elevation-hover: 0 10px 24px -12px rgba(15, 23, 42, 0.22);
+  --elevation-soft: 0 6px 16px -10px rgba(15, 23, 42, 0.2);
+  --focus-ring: rgba(15, 118, 110, 0.45);
+}
+
+* {
+  @apply border-slate-200;
+}
+
+body {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(15, 118, 110, 0.09), transparent 35%),
+    radial-gradient(circle at 100% 0%, rgba(14, 116, 144, 0.08), transparent 40%),
+    rgb(var(--background));
+  color: rgb(var(--foreground));
+}
+
+@layer utilities {
+  .page-stack {
+    @apply space-y-8;
+  }
+
+  .page-header {
+    @apply space-y-2;
+  }
+
+  .page-title {
+    @apply text-3xl font-semibold tracking-tight text-slate-900;
+  }
+
+  .page-subtitle {
+    @apply text-sm leading-6 text-slate-600;
+  }
+
+  .page-caption {
+    @apply text-xs leading-5 text-slate-500;
+  }
+
+  .motion-standard {
+    transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+    transition-duration: var(--motion-standard);
+    transition-timing-function: var(--motion-ease);
+  }
+
+  .hover-elevate {
+    transition-property: transform, box-shadow;
+    transition-duration: var(--motion-standard);
+    transition-timing-function: var(--motion-ease);
+  }
+
+  .hover-elevate:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--elevation-hover);
+  }
+
+  .hover-elevate:focus-visible {
+    transform: translateY(-1px);
+    box-shadow:
+      var(--elevation-soft),
+      0 0 0 2px #ffffff,
+      0 0 0 4px var(--focus-ring);
+  }
+
+  .focus-enterprise {
+    outline: none;
+  }
+
+  .focus-enterprise:focus-visible {
+    box-shadow:
+      0 0 0 2px #ffffff,
+      0 0 0 4px var(--focus-ring);
+  }
+
+  .focus-enterprise-inset:focus-visible {
+    box-shadow:
+      inset 0 0 0 1px rgba(15, 23, 42, 0.04),
+      0 0 0 2px #ffffff,
+      0 0 0 4px var(--focus-ring);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .motion-standard,
+    .hover-elevate {
+      transition-duration: 0ms;
+      transform: none;
+    }
+  }
+}

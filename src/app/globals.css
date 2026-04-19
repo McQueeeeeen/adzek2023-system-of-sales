@@ -47,6 +47,30 @@ body {
     @apply text-xs leading-5 text-slate-500;
   }
 
+  .section-title {
+    @apply text-base font-semibold text-slate-900;
+  }
+
+  .section-subtitle {
+    @apply text-sm leading-6 text-slate-600;
+  }
+
+  .field-label {
+    @apply text-xs uppercase tracking-wide text-slate-400;
+  }
+
+  .field-value {
+    @apply mt-1 text-sm font-medium text-slate-800;
+  }
+
+  .field-value-strong {
+    @apply mt-1 text-sm font-semibold text-slate-900;
+  }
+
+  .panel-stack {
+    @apply space-y-6;
+  }
+
   .motion-standard {
     transition-property: color, background-color, border-color, opacity, transform, box-shadow;
     transition-duration: var(--motion-standard);

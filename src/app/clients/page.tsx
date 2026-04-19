@@ -75,7 +75,7 @@ export default function ClientsPage() {
   return (
     <div className="page-stack">
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
+        <div className="page-header">
           <h2 className="page-title">Клиенты</h2>
           <p className="page-subtitle">
             Ежедневный список действий: кому написать, кого продвинуть, где закрыть.
@@ -91,9 +91,9 @@ export default function ClientsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Фильтры</CardTitle>
+          <CardTitle className="section-title">Фильтры</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-[1fr_220px_180px]">
+        <CardContent className="grid gap-4 md:grid-cols-[1fr_220px_180px]">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <Input
@@ -123,7 +123,7 @@ export default function ClientsPage() {
           {loading ? (
             <p className="pb-4 text-sm text-slate-600">Загружаем клиентов...</p>
           ) : null}
-          <Table className="[&_th]:h-auto [&_th]:px-4 [&_th]:py-3.5 [&_td]:px-4 [&_td]:py-3.5">
+          <Table className="[&_th]:h-auto [&_th]:px-4 [&_th]:py-4 [&_td]:px-4 [&_td]:py-4">
             <TableHeader>
               <TableRow>
                 <TableHead>Имя</TableHead>

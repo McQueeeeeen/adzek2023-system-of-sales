@@ -18,13 +18,13 @@ export default function NewClientPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <header>
-        <h2 className="text-2xl font-semibold text-slate-900">Новый клиент</h2>
-        <p className="mt-1.5 text-sm text-slate-600">
+    <div className="page-stack">
+      <header className="page-header">
+        <h2 className="page-title">Новый клиент</h2>
+        <p className="page-subtitle">
           Быстро фиксируйте лид и сразу ставьте касание.
         </p>
-        <div className="mt-4 inline-flex rounded-lg border border-slate-200 bg-white p-1">
+        <div className="mt-2 inline-flex rounded-lg border border-slate-200 bg-white p-1">
           <Button
             type="button"
             variant={mode === "quick" ? "default" : "ghost"}

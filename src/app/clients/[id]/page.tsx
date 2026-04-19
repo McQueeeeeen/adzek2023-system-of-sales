@@ -363,36 +363,36 @@ export default function ClientDetailPage() {
       <section className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Карточка клиента</CardTitle>
+            <CardTitle className="section-title">Карточка клиента</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-6 sm:grid-cols-2">
+          <CardContent className="grid gap-7 sm:grid-cols-2">
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Продукт</p>
-              <p className="mt-1 text-sm font-medium text-slate-800">{currentClient.product}</p>
+              <p className="field-label">Продукт</p>
+              <p className="field-value">{currentClient.product}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Дата пробника</p>
-              <p className="mt-1 text-sm font-medium text-slate-800">{formatDate(currentClient.sampleSentDate)}</p>
+              <p className="field-label">Дата пробника</p>
+              <p className="field-value">{formatDate(currentClient.sampleSentDate)}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Статус</p>
+              <p className="field-label">Статус</p>
               <div className="mt-1">
                 <ClientStatusBadge status={currentClient.status} />
               </div>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Приоритет</p>
+              <p className="field-label">Приоритет</p>
               <div className="mt-1">
                 <ClientPriorityBadge priority={currentClient.priority} />
               </div>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Ответственный</p>
-              <p className="mt-1 text-sm font-medium text-slate-800">{currentClient.assignedTo}</p>
+              <p className="field-label">Ответственный</p>
+              <p className="field-value">{currentClient.assignedTo}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Следующее касание</p>
-              <p className="mt-1 flex items-center gap-2 text-sm font-medium text-slate-800">
+              <p className="field-label">Следующее касание</p>
+              <p className="field-value flex items-center gap-2">
                 {isOverdue ? (
                   <AlertTriangle className="h-4 w-4 text-rose-500" />
                 ) : (
@@ -402,18 +402,18 @@ export default function ClientDetailPage() {
               </p>
             </div>
             <div className="sm:col-span-2">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Следующее действие</p>
+              <p className="field-label">Следующее действие</p>
               <p className="mt-1 rounded-lg bg-slate-50 p-3 text-sm font-medium text-slate-800">
                 {currentClient.nextAction}
               </p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Последний контакт</p>
-              <p className="mt-1 text-sm font-medium text-slate-800">{formatDate(currentClient.lastContactAt)}</p>
+              <p className="field-label">Последний контакт</p>
+              <p className="field-value">{formatDate(currentClient.lastContactAt)}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Потенциал</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">
+              <p className="field-label">Потенциал</p>
+              <p className="field-value-strong">
                 {formatCurrency(currentClient.estimatedMonthlyValue)}
               </p>
               {currentClient.estimatedMonthlyValue >= HIGH_VALUE_THRESHOLD_KZT ? (
@@ -421,19 +421,19 @@ export default function ClientDetailPage() {
               ) : null}
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Сегмент</p>
-              <p className="mt-1 text-sm font-medium text-slate-800">{currentClient.segment || "Не указан"}</p>
+              <p className="field-label">Сегмент</p>
+              <p className="field-value">{currentClient.segment || "Не указан"}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Город</p>
-              <p className="mt-1 text-sm font-medium text-slate-800">{currentClient.city || "Не указан"}</p>
+              <p className="field-label">Город</p>
+              <p className="field-value">{currentClient.city || "Не указан"}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Email</p>
-              <p className="mt-1 text-sm font-medium text-slate-800">{currentClient.email || "Не указан"}</p>
+              <p className="field-label">Email</p>
+              <p className="field-value">{currentClient.email || "Не указан"}</p>
             </div>
             <div className="sm:col-span-2">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Контекст</p>
+              <p className="field-label">Контекст</p>
               <p className="mt-1 text-sm text-slate-700">{currentClient.notes || "Комментариев пока нет."}</p>
             </div>
           </CardContent>
@@ -441,11 +441,11 @@ export default function ClientDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Быстрые действия</CardTitle>
+            <CardTitle className="section-title">Быстрые действия</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-800">Смена статуса в 1 клик</p>
+          <CardContent className="panel-stack">
+            <div className="space-y-3">
+              <p className="section-subtitle font-medium text-slate-800">Смена статуса в 1 клик</p>
               <div className="grid grid-cols-2 gap-2">
                 {CLIENT_STATUSES.map((status) => (
                   <Button
@@ -460,8 +460,8 @@ export default function ClientDetailPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-800">Быстро назначить касание</p>
+            <div className="space-y-3">
+              <p className="section-subtitle font-medium text-slate-800">Быстро назначить касание</p>
               <div className="grid grid-cols-3 gap-2">
                 <Button variant="outline" onClick={() => void scheduleFollowUp(0, "Сегодня")}>Сегодня</Button>
                 <Button variant="outline" onClick={() => void scheduleFollowUp(2, "+2 дня")}>+2</Button>
@@ -469,9 +469,9 @@ export default function ClientDetailPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-slate-800">Шаблон WhatsApp</p>
+                <p className="section-subtitle font-medium text-slate-800">Шаблон WhatsApp</p>
                 <Button asChild variant="outline" size="sm">
                   <Link href="/settings/whatsapp-templates">Управлять шаблонами</Link>
                 </Button>
@@ -530,8 +530,8 @@ export default function ClientDetailPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-800">Следующее действие</p>
+            <div className="space-y-3">
+              <p className="section-subtitle font-medium text-slate-800">Следующее действие</p>
               <Textarea
                 value={nextActionDraft}
                 onChange={(e) => setNextActionDraft(e.target.value)}
@@ -540,8 +540,8 @@ export default function ClientDetailPage() {
               <Button variant="outline" onClick={() => void saveNextAction()}>Сохранить действие</Button>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-800">Добавить касание в историю</p>
+            <div className="space-y-3">
+              <p className="section-subtitle font-medium text-slate-800">Добавить касание в историю</p>
               <Textarea
                 value={noteDraft}
                 onChange={(e) => setNoteDraft(e.target.value)}

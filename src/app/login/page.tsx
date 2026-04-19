@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,6 @@ import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,7 +35,7 @@ export default function LoginPage() {
       return;
     }
 
-    const next = searchParams.get("next");
+    const next = new URLSearchParams(window.location.search).get("next");
     window.location.href = next && next.startsWith("/") ? next : "/";
   }
 

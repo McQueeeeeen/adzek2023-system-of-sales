@@ -87,7 +87,7 @@ export default function SignupPage() {
               id="fullName"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Эмин"
+              placeholder="Введите имя"
               required
             />
           </div>
@@ -156,4 +156,3 @@ export default function SignupPage() {
     </Card>
   );
 }
-

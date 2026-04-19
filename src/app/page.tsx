@@ -226,6 +226,81 @@ export default function DashboardPage() {
     "won",
   ];
 
+  const stageMeta: Record<
+    (typeof pipelineOrder)[number],
+    { tone: string; bar: string; hint: string }
+  > = {
+    new: {
+      tone: "bg-slate-100 text-slate-700 ring-slate-200",
+      bar: "bg-slate-400",
+      hint: "Новый входящий интерес",
+    },
+    sample: {
+      tone: "bg-cyan-100 text-cyan-700 ring-cyan-200",
+      bar: "bg-cyan-500",
+      hint: "Отправлен пробник",
+    },
+    "waiting-test": {
+      tone: "bg-amber-100 text-amber-700 ring-amber-200",
+      bar: "bg-amber-500",
+      hint: "Ожидание результата теста",
+    },
+    interested: {
+      tone: "bg-violet-100 text-violet-700 ring-violet-200",
+      bar: "bg-violet-500",
+      hint: "Есть интерес к закупке",
+    },
+    negotiating: {
+      tone: "bg-orange-100 text-orange-700 ring-orange-200",
+      bar: "bg-orange-500",
+      hint: "Согласование условий",
+    },
+    won: {
+      tone: "bg-emerald-100 text-emerald-700 ring-emerald-200",
+      bar: "bg-emerald-500",
+      hint: "Закрытые сделки",
+    },
+  };
+
+  const pipelineRows = pipelineOrder.map((status) => {
+    const count = clients.filter((client) => client.status === status).length;
+    return {
+      status,
+      count,
+      ...stageMeta[status],
+    };
+  });
+  const maxPipelineCount = Math.max(1, ...pipelineRows.map((item) => item.count));
+
+  const dailyScenario = [
+    {
+      id: "01",
+      title: "Закройте все просроченные касания",
+      hint: "Сначала уберите риск потери клиента.",
+      tone: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+    },
+    {
+      id: "02",
+      title: "Выполните касания на сегодня",
+      hint: "Держите темп и не переносите на завтра.",
+      tone: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+    },
+    {
+      id: "03",
+      title: "Обновите следующее действие по активным лидам",
+      hint: "У каждого клиента должен быть четкий следующий шаг.",
+      tone: "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200",
+    },
+    {
+      id: "04",
+      title: `Сконцентрируйтесь на лидах с потенциалом от ${formatCurrency(
+        HIGH_VALUE_THRESHOLD_KZT
+      )}`,
+      hint: "Приоритет дня: сделки с высокой ценностью.",
+      tone: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+    },
+  ];
+
   async function sendTelegramDigest() {
     try {
       setIsSendingTelegram(true);
@@ -362,17 +437,28 @@ export default function DashboardPage() {
             <CardDescription>Текущее распределение клиентов</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-3">
-            {pipelineOrder.map((status) => {
-              const count = clients.filter((client) => client.status === status).length;
+            {pipelineRows.map((item) => {
+              const width = Math.max(8, Math.round((item.count / maxPipelineCount) * 100));
               return (
                 <div
-                  key={status}
-                  className="hover-elevate motion-standard rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 hover:border-slate-300 hover:bg-white"
+                  key={item.status}
+                  className="hover-elevate motion-standard rounded-xl border border-slate-200 bg-gradient-to-r from-white to-slate-50/80 px-4 py-3.5 hover:border-slate-300"
                 >
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    {STATUS_LABELS[status]}
-                  </p>
-                  <p className="mt-1 text-xl font-semibold text-slate-900">{count}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <span
+                      className={`rounded-md px-2 py-1 text-[11px] font-semibold ring-1 ${item.tone}`}
+                    >
+                      {STATUS_LABELS[item.status]}
+                    </span>
+                    <p className="text-xl font-semibold text-slate-900">{item.count}</p>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">{item.hint}</p>
+                  <div className="mt-3 h-1.5 w-full rounded-full bg-slate-100">
+                    <div
+                      className={`h-1.5 rounded-full ${item.bar}`}
+                      style={{ width: `${width}%` }}
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -398,13 +484,33 @@ export default function DashboardPage() {
               <CardTitle>Ежедневный сценарий</CardTitle>
               <CardDescription>Короткий цикл работы на день</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">1. Закройте все просроченные касания.</div>
-              <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">2. Выполните касания на сегодня.</div>
-              <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">3. Обновите следующее действие по каждому активному клиенту.</div>
-              <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-                4. Сконцентрируйтесь на лидах с высоким потенциалом (от{" "}
-                {formatCurrency(HIGH_VALUE_THRESHOLD_KZT)}).
+            <CardContent>
+              <div className="space-y-2.5">
+                {dailyScenario.map((step, index) => (
+                  <div
+                    key={step.id}
+                    className="hover-elevate motion-standard rounded-xl border border-slate-200 bg-gradient-to-r from-white to-slate-50/80 p-3.5"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={`mt-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1.5 text-[11px] font-semibold ${step.tone}`}
+                      >
+                        {step.id}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold leading-5 text-slate-900">
+                          {step.title}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-slate-600">{step.hint}</p>
+                      </div>
+                      {index === 0 ? (
+                        <span className="rounded-md bg-rose-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+                          Приоритет
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>

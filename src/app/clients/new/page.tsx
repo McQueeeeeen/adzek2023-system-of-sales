@@ -12,8 +12,8 @@ export default function NewClientPage() {
   const { dispatch } = useClientStore();
   const [mode, setMode] = useState<"quick" | "full">("quick");
 
-  function handleCreate(payload: ClientInput) {
-    dispatch({ type: "add_client", payload });
+  async function handleCreate(payload: ClientInput) {
+    await dispatch({ type: "add_client", payload });
     router.push("/clients");
   }
 

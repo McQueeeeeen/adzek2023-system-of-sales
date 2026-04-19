@@ -1,9 +1,8 @@
 import { getFollowUpBucketsInTimezone } from "@/lib/client-selectors";
-import { STATUS_LABELS } from "@/lib/format";
+import { formatKzt, HIGH_VALUE_THRESHOLD_KZT, STATUS_LABELS } from "@/lib/format";
 import { Client } from "@/types/client";
 
 export const KZ_TIMEZONE = process.env.KZ_TIMEZONE || "Asia/Almaty";
-const KZT_RATE = Number(process.env.KZT_RATE || "510");
 const MAX_CLIENTS_PER_BLOCK = Number(process.env.TELEGRAM_BLOCK_LIMIT || "5");
 const UPCOMING_LIMIT = 2;
 
@@ -22,13 +21,8 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;");
 }
 
-function toKztValue(usdAmount: number) {
-  return Math.round(usdAmount * KZT_RATE);
-}
-
-function formatKzt(usdAmount: number) {
-  const amount = toKztValue(usdAmount);
-  return `${amount.toLocaleString("ru-RU")} ₸`;
+function toKztValue(kztAmount: number) {
+  return Math.round(kztAmount);
 }
 
 function sortByPriorityAndPotential(clients: Client[]) {
@@ -128,7 +122,7 @@ function sectionLines(
 function getFocusLine(overdue: Client[], dueToday: Client[]) {
   const actionable = [...overdue, ...dueToday];
   const hasHighValue = actionable.some(
-    (client) => toKztValue(client.estimatedMonthlyValue) > 1_000_000
+    (client) => toKztValue(client.estimatedMonthlyValue) > HIGH_VALUE_THRESHOLD_KZT
   );
 
   if (hasHighValue) {
@@ -192,7 +186,7 @@ export function formatTelegramDigest(
     ),
     "",
     "<b>💰 Итого потенциал:</b>",
-    `${totalPotentialKzt.toLocaleString("ru-RU")} ₸`,
+    formatKzt(totalPotentialKzt),
     "",
     "<b>👉 Фокус:</b>",
     getFocusLine(overdue, dueToday),

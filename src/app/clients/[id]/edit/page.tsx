@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useParams, useRouter } from "next/navigation";
 import { useMemo } from "react";
@@ -12,11 +12,12 @@ export default function EditClientPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { state, dispatch } = useClientStore();
+  const { loading, hydrated } = state;
 
   const client = useMemo(() => getClientById(state.clients, id), [state.clients, id]);
 
-  function handleSave(payload: ClientInput) {
-    dispatch({
+  async function handleSave(payload: ClientInput) {
+    await dispatch({
       type: "update_client",
       payload: {
         id,
@@ -24,7 +25,7 @@ export default function EditClientPage() {
       },
     });
 
-    dispatch({
+    await dispatch({
       type: "add_history_event",
       payload: {
         clientId: id,
@@ -39,12 +40,18 @@ export default function EditClientPage() {
     router.push(`/clients/${id}`);
   }
 
+  if (loading && !hydrated) {
+    return (
+      <Card>
+        <CardContent className="pt-6 text-sm text-slate-600">Загружаем клиента...</CardContent>
+      </Card>
+    );
+  }
+
   if (!client) {
     return (
       <Card>
-        <CardContent className="pt-6 text-sm text-slate-600">
-          Клиент не найден.
-        </CardContent>
+        <CardContent className="pt-6 text-sm text-slate-600">Клиент не найден.</CardContent>
       </Card>
     );
   }

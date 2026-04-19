@@ -1,4 +1,4 @@
-﻿import { ClientStatus } from "@/types/client";
+import { ClientStatus } from "@/types/client";
 
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
@@ -6,17 +6,19 @@ const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
   year: "numeric",
 });
 
+export const CURRENCY_SYMBOL = "₸";
+export const HIGH_VALUE_THRESHOLD_KZT = 1_000_000;
+
 export function formatDate(value: string) {
   return dateFormatter.format(new Date(value));
 }
 
-export function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(amount);
+export function formatKzt(amount: number) {
+  const safeAmount = Number.isFinite(amount) ? Math.round(amount) : 0;
+  return `${safeAmount.toLocaleString("ru-RU")} ${CURRENCY_SYMBOL}`;
 }
+
+export const formatCurrency = formatKzt;
 
 export const STATUS_LABELS: Record<ClientStatus, string> = {
   new: "Новый",

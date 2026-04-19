@@ -1,8 +1,14 @@
-# Adzek2023 Sales OS
+﻿# Adzek2023 Sales OS
 
-CRM-lite для управления B2B лидами и follow-up задачами.
+Внутренняя CRM-система для B2B продаж: клиенты, касания, следующий шаг, Telegram-дайджест.
 
-## Запуск
+## Стек
+
+- Next.js App Router + TypeScript
+- Tailwind + shadcn/ui
+- Supabase (Auth + Postgres + RLS)
+
+## Локальный запуск
 
 ```bash
 npm install
@@ -11,55 +17,81 @@ npm run dev
 
 Открыть: [http://localhost:3000](http://localhost:3000)
 
-## Telegram reminders (daily digest)
-
-Система отправляет утренний дайджест в Telegram с разбивкой:
-- просроченные касания
-- касания на сегодня
-- имя клиента, компания, статус, следующее действие, телефон, потенциал (в KZT)
-
-### 1. Настройка переменных окружения
+## Переменные окружения
 
 Скопируйте `.env.example` в `.env.local` и заполните:
 
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 - `CRON_SECRET`
-- `KZ_TIMEZONE` (по умолчанию `Asia/Almaty`)
-- `KZT_RATE` (курс USD→KZT для поля потенциала)
+- `KZ_TIMEZONE` (обычно `Asia/Almaty`)
+- `TELEGRAM_BLOCK_LIMIT` (обычно `5`)
 
-### 2. Endpoint отправки дайджеста
+## Supabase: схема и RLS
 
-- `GET /api/telegram/send-digest` — cron запуск
-- `POST /api/telegram/send-digest` — ручной запуск
+SQL-миграция лежит в:
 
-Пример body для `POST`:
+- `supabase/migrations/20260419_init_crm.sql`
 
-```json
-{
-  "clients": []
-}
-```
+Она создает:
 
-Если `clients` не переданы, endpoint использует mock-данные.
+- `profiles`
+- `clients`
+- `client_activities`
+- триггеры `updated_at` и автосоздания профиля из `auth.users`
+- RLS и политики доступа по `auth.uid()`
 
-Оба защищены через `CRON_SECRET`:
-- `Authorization: Bearer <CRON_SECRET>`, или
-- `?secret=<CRON_SECRET>`
+## Auth
 
-### 3. Ежедневный cron
+Реализовано:
 
-В `vercel.json` настроен запуск:
+- `/signup` — регистрация (email/password)
+- `/login` — вход (email/password)
+- logout из сайдбара
+- редирект после входа на `/`
+- редирект с `/login` и `/signup` для уже авторизованного пользователя
 
-- `0 4 * * *` (ежедневно в 04:00 UTC, это 09:00 по Казахстану `Asia/Almaty`)
+## Защита маршрутов
 
-## Ограничение текущего MVP
+Middleware защищает:
 
-Дайджест сейчас строится из `MOCK_CLIENTS` (или из `clients` в POST body для ручного режима).
-Чтобы напоминания отражали реальные изменения из UI в продакшене, следующим шагом нужно хранить клиентов в общей БД (Postgres/Supabase) и читать их из серверного слоя.
+- `/`
+- `/clients`
+- `/clients/[id]`
+- `/clients/new`
+- `/clients/[id]/edit`
+- `/settings`
 
-## UI
+Неавторизованные пользователи перенаправляются на `/login`.
 
-На дашборде добавлена кнопка `Отправить в Telegram`.
-После отправки показывается toast:
-- `Сообщение отправлено`
+## Telegram reminders
+
+Endpoint:
+
+- `GET /api/telegram/send-digest` — cron-режим
+- `POST /api/telegram/send-digest` — ручная отправка
+
+Формат:
+
+- `🔴 Просрочено`
+- `🟡 На сегодня`
+- `⚪ Дальше по плану` (до 2 клиентов)
+- итоговый потенциал только по overdue + due today
+- динамический блок `👉 Фокус`
+
+Защита endpoint:
+
+- `Authorization: Bearer <CRON_SECRET>` или `?secret=<CRON_SECRET>`
+
+## Vercel cron
+
+В `vercel.json`:
+
+- `0 4 * * *` (09:00 по Казахстану при `Asia/Almaty`)
+
+## Важно
+
+CRM-данные читаются и пишутся в Supabase (localStorage как источник правды удален).

@@ -19,7 +19,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getClientById } from "@/lib/client-selectors";
-import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDate,
+  HIGH_VALUE_THRESHOLD_KZT,
+  STATUS_LABELS,
+} from "@/lib/format";
 import {
   buildTemplateMessage,
   buildWhatsappLink,
@@ -64,6 +69,7 @@ export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { state, dispatch } = useClientStore();
+  const { loading, hydrated } = state;
   const client = useMemo(() => getClientById(state.clients, id), [state.clients, id]);
 
   const [noteDraft, setNoteDraft] = useState("");
@@ -78,6 +84,16 @@ export default function ClientDetailPage() {
       setTemplateDraft(client.messageTemplate);
     }
   }, [client]);
+
+  if (loading && !hydrated) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-sm text-slate-600">Загружаем карточку клиента...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!client) {
     return (
@@ -102,13 +118,13 @@ export default function ClientDetailPage() {
 
   const whatsappHref = buildWhatsappLink(currentClient.whatsappNumber, templateMessage);
 
-  function updateStatus(nextStatus: ClientStatus) {
+  async function updateStatus(nextStatus: ClientStatus) {
     if (nextStatus === currentClient.status) return;
 
     const suggestedAction = defaultNextAction(nextStatus);
     const nextTemplate = getDefaultTemplateId(nextStatus);
 
-    dispatch({
+    await dispatch({
       type: "update_client",
       payload: {
         id: currentClient.id,
@@ -120,7 +136,7 @@ export default function ClientDetailPage() {
       },
     });
 
-    dispatch({
+    await dispatch({
       type: "add_history_event",
       payload: {
         clientId: currentClient.id,
@@ -136,9 +152,9 @@ export default function ClientDetailPage() {
     setTemplateDraft(nextTemplate);
   }
 
-  function scheduleFollowUp(days: number, label: string) {
+  async function scheduleFollowUp(days: number, label: string) {
     const date = offsetIsoDate(days);
-    dispatch({
+    await dispatch({
       type: "update_client",
       payload: {
         id: currentClient.id,
@@ -146,7 +162,7 @@ export default function ClientDetailPage() {
       },
     });
 
-    dispatch({
+    await dispatch({
       type: "add_history_event",
       payload: {
         clientId: currentClient.id,
@@ -159,11 +175,11 @@ export default function ClientDetailPage() {
     });
   }
 
-  function saveNextAction() {
+  async function saveNextAction() {
     const value = nextActionDraft.trim();
     if (!value || value === currentClient.nextAction) return;
 
-    dispatch({
+    await dispatch({
       type: "update_client",
       payload: {
         id: currentClient.id,
@@ -171,7 +187,7 @@ export default function ClientDetailPage() {
       },
     });
 
-    dispatch({
+    await dispatch({
       type: "add_history_event",
       payload: {
         clientId: currentClient.id,
@@ -184,11 +200,11 @@ export default function ClientDetailPage() {
     });
   }
 
-  function saveTemplate(templateId: MessageTemplateId) {
+  async function saveTemplate(templateId: MessageTemplateId) {
     setTemplateDraft(templateId);
     if (templateId === currentClient.messageTemplate) return;
 
-    dispatch({
+    await dispatch({
       type: "update_client",
       payload: {
         id: currentClient.id,
@@ -196,7 +212,7 @@ export default function ClientDetailPage() {
       },
     });
 
-    dispatch({
+    await dispatch({
       type: "add_history_event",
       payload: {
         clientId: currentClient.id,
@@ -209,11 +225,11 @@ export default function ClientDetailPage() {
     });
   }
 
-  function addTouchpoint() {
+  async function addTouchpoint() {
     const note = noteDraft.trim();
     if (!note) return;
 
-    dispatch({
+    await dispatch({
       type: "add_history_event",
       payload: {
         clientId: currentClient.id,
@@ -228,8 +244,8 @@ export default function ClientDetailPage() {
     setNoteDraft("");
   }
 
-  function sendWhatsappTemplate() {
-    dispatch({
+  async function sendWhatsappTemplate() {
+    await dispatch({
       type: "add_history_event",
       payload: {
         clientId: currentClient.id,
@@ -329,7 +345,7 @@ export default function ClientDetailPage() {
               <p className="mt-1 text-sm font-semibold text-slate-900">
                 {formatCurrency(currentClient.estimatedMonthlyValue)}
               </p>
-              {currentClient.estimatedMonthlyValue >= 3000 ? (
+              {currentClient.estimatedMonthlyValue >= HIGH_VALUE_THRESHOLD_KZT ? (
                 <p className="mt-1 text-xs font-semibold text-emerald-700">Высокий потенциал выручки</p>
               ) : null}
             </div>
@@ -365,7 +381,7 @@ export default function ClientDetailPage() {
                     key={status}
                     variant={currentClient.status === status ? "default" : "outline"}
                     className="justify-start"
-                    onClick={() => updateStatus(status)}
+                    onClick={() => void updateStatus(status)}
                   >
                     {STATUS_LABELS[status]}
                   </Button>
@@ -376,9 +392,9 @@ export default function ClientDetailPage() {
             <div className="space-y-2">
               <p className="text-sm font-medium text-slate-800">Быстро назначить касание</p>
               <div className="grid grid-cols-3 gap-2">
-                <Button variant="outline" onClick={() => scheduleFollowUp(0, "Сегодня")}>Сегодня</Button>
-                <Button variant="outline" onClick={() => scheduleFollowUp(2, "+2 дня")}>+2</Button>
-                <Button variant="outline" onClick={() => scheduleFollowUp(5, "+5 дней")}>+5</Button>
+                <Button variant="outline" onClick={() => void scheduleFollowUp(0, "Сегодня")}>Сегодня</Button>
+                <Button variant="outline" onClick={() => void scheduleFollowUp(2, "+2 дня")}>+2</Button>
+                <Button variant="outline" onClick={() => void scheduleFollowUp(5, "+5 дней")}>+5</Button>
               </div>
             </div>
 
@@ -386,7 +402,7 @@ export default function ClientDetailPage() {
               <p className="text-sm font-medium text-slate-800">Шаблон WhatsApp</p>
               <Select
                 value={templateDraft}
-                onChange={(e) => saveTemplate(e.target.value as MessageTemplateId)}
+                onChange={(e) => void saveTemplate(e.target.value as MessageTemplateId)}
               >
                 {MESSAGE_TEMPLATE_IDS.map((templateId) => (
                   <option key={templateId} value={templateId}>
@@ -407,7 +423,7 @@ export default function ClientDetailPage() {
                 onChange={(e) => setNextActionDraft(e.target.value)}
                 placeholder="Коротко: что делаем в следующем касании"
               />
-              <Button variant="outline" onClick={saveNextAction}>Сохранить действие</Button>
+              <Button variant="outline" onClick={() => void saveNextAction()}>Сохранить действие</Button>
             </div>
 
             <div className="space-y-2">
@@ -417,7 +433,7 @@ export default function ClientDetailPage() {
                 onChange={(e) => setNoteDraft(e.target.value)}
                 placeholder="Например: клиент попросил КП и условия поставки"
               />
-              <Button onClick={addTouchpoint}>
+              <Button onClick={() => void addTouchpoint()}>
                 <Plus className="mr-1.5 h-4 w-4" />
                 Добавить в таймлайн
               </Button>

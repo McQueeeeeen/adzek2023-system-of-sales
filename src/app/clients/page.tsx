@@ -20,10 +20,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { filterClients } from "@/lib/client-selectors";
-import { formatDate, STATUS_LABELS } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDate,
+  HIGH_VALUE_THRESHOLD_KZT,
+  STATUS_LABELS,
+} from "@/lib/format";
 import { CLIENT_STATUSES, ClientStatus } from "@/types/client";
-
-const HIGH_VALUE_THRESHOLD = 3000;
 
 function isToday(dateString: string) {
   const date = new Date(dateString);
@@ -45,7 +48,7 @@ function isOverdue(dateString: string) {
 export default function ClientsPage() {
   const router = useRouter();
   const {
-    state: { clients },
+    state: { clients, loading },
   } = useClientStore();
 
   const [query, setQuery] = useState("");
@@ -117,6 +120,9 @@ export default function ClientsPage() {
 
       <Card>
         <CardContent className="pt-6">
+          {loading ? (
+            <p className="pb-4 text-sm text-slate-600">Загружаем клиентов...</p>
+          ) : null}
           <Table className="[&_th]:h-auto [&_th]:px-4 [&_th]:py-3.5 [&_td]:px-4 [&_td]:py-3.5">
             <TableHeader>
               <TableRow>
@@ -142,7 +148,7 @@ export default function ClientsPage() {
                     ? "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
                     : "bg-slate-100 text-slate-700";
                 const dateLabel = overdue ? "ПРОСРОЧЕНО" : dueToday ? "СЕГОДНЯ" : "ДАЛЕЕ";
-                const highValue = client.estimatedMonthlyValue >= HIGH_VALUE_THRESHOLD;
+                const highValue = client.estimatedMonthlyValue >= HIGH_VALUE_THRESHOLD_KZT;
 
                 return (
                   <TableRow
@@ -202,7 +208,7 @@ export default function ClientsPage() {
                               : "bg-slate-100 text-slate-700"
                           }`}
                         >
-                          ${client.estimatedMonthlyValue.toLocaleString("en-US")}
+                          {formatCurrency(client.estimatedMonthlyValue)}
                         </span>
                       </div>
                     </TableCell>

@@ -239,7 +239,7 @@ export function ClientForm({ initialClient, onSubmit, submitLabel, mode = "full"
           {mode === "full" ? (
             <>
               <div className="space-y-2">
-                <Label htmlFor="estimatedMonthlyValue">Оценка объема в месяц (USD)</Label>
+                <Label htmlFor="estimatedMonthlyValue">Оценка объема в месяц (₸)</Label>
                 <Input
                   id="estimatedMonthlyValue"
                   type="number"

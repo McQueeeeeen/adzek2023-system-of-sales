@@ -1,23 +1,28 @@
-﻿"use client";
+"use client";
 
 import {
   createContext,
-  Dispatch,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useReducer,
+  useState,
 } from "react";
-import { MOCK_CLIENTS } from "@/lib/mock-data";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  DbActivityRow,
+  DbClientRow,
+  mapClientInputToDbClient,
+  mapDbClientToClient,
+} from "@/lib/crm-mappers";
 import { getDefaultTemplateId } from "@/lib/whatsapp-templates";
 import { Client, ClientHistoryEvent, ClientInput } from "@/types/client";
-
-const STORAGE_KEY = "adzek2023.crm.clients.v1";
 
 type ClientState = {
   clients: Client[];
   hydrated: boolean;
+  loading: boolean;
 };
 
 type AddClientAction = {
@@ -54,9 +59,19 @@ type ClientAction =
   | AddHistoryAction
   | HydrateAction;
 
-function makeId(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-}
+type ClientStoreContextValue = {
+  state: ClientState;
+  dispatch: (action: ClientAction) => Promise<void>;
+  reload: () => Promise<void>;
+};
+
+const ClientStoreContext = createContext<ClientStoreContextValue | null>(null);
+
+const INITIAL_STATE: ClientState = {
+  clients: [],
+  hydrated: false,
+  loading: true,
+};
 
 function defaultNextAction(status: Client["status"]) {
   switch (status) {
@@ -79,139 +94,195 @@ function defaultNextAction(status: Client["status"]) {
   }
 }
 
-function normalizeClient(client: Client): Client {
-  return {
-    ...client,
-    messageTemplate: client.messageTemplate ?? getDefaultTemplateId(client.status),
-    nextAction: client.nextAction?.trim() || defaultNextAction(client.status),
-  };
-}
-
-function upsertUpdatedAt(client: Client): Client {
-  return {
-    ...client,
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function reducer(state: ClientState, action: ClientAction): ClientState {
-  if (action.type === "hydrate") {
-    return {
-      clients: action.payload,
-      hydrated: true,
-    };
-  }
-
-  if (action.type === "add_client") {
-    const now = new Date().toISOString();
-    const newClient: Client = {
-      id: makeId("c"),
-      createdAt: now,
-      updatedAt: now,
-      lastContactAt: action.payload.lastContactAt ?? now,
-      history: [
-        {
-          id: makeId("h"),
-          date: now,
-          type: "sample_sent",
-          title: "Клиент добавлен",
-          description: "Воронка и первое касание инициализированы.",
-        },
-      ],
-      ...action.payload,
-      messageTemplate: getDefaultTemplateId(action.payload.status),
-      nextAction:
-        action.payload.nextAction?.trim() || defaultNextAction(action.payload.status),
-    };
-
-    return {
-      ...state,
-      clients: [newClient, ...state.clients],
-    };
-  }
-
-  if (action.type === "update_client") {
-    return {
-      ...state,
-      clients: state.clients.map((client) => {
-        if (client.id !== action.payload.id) {
-          return client;
-        }
-
-        const updated = {
-          ...client,
-          ...action.payload.updates,
-        };
-
-        return upsertUpdatedAt(updated);
-      }),
-    };
-  }
-
-  if (action.type === "add_history_event") {
-    return {
-      ...state,
-      clients: state.clients.map((client) => {
-        if (client.id !== action.payload.clientId) {
-          return client;
-        }
-
-        const event: ClientHistoryEvent = {
-          id: makeId("h"),
-          date: action.payload.event.date ?? new Date().toISOString(),
-          type: action.payload.event.type,
-          title: action.payload.event.title,
-          description: action.payload.event.description,
-        };
-
-        return upsertUpdatedAt({
-          ...client,
-          lastContactAt: event.date,
-          history: [event, ...client.history],
-        });
-      }),
-    };
-  }
-
-  return state;
-}
-
-type ClientStoreContextValue = {
-  state: ClientState;
-  dispatch: Dispatch<ClientAction>;
-};
-
-const ClientStoreContext = createContext<ClientStoreContextValue | null>(null);
-
-const INITIAL_STATE: ClientState = {
-  clients: MOCK_CLIENTS,
-  hydrated: false,
-};
-
 export function ClientStoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  const [state, setState] = useState<ClientState>(INITIAL_STATE);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
-  useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      dispatch({ type: "hydrate", payload: MOCK_CLIENTS });
+  const reload = useCallback(async () => {
+    setState((prev) => ({ ...prev, loading: true }));
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setState({ clients: [], hydrated: true, loading: false });
       return;
     }
 
-    try {
-      const parsed = JSON.parse(raw) as Client[];
-      dispatch({ type: "hydrate", payload: parsed.map(normalizeClient) });
-    } catch {
-      dispatch({ type: "hydrate", payload: MOCK_CLIENTS });
+    const [clientsResult, activitiesResult] = await Promise.all([
+      supabase
+        .from("crm_clients")
+        .select("*")
+        .eq("owner_id", user.id)
+        .order("next_follow_up_date", { ascending: true }),
+      supabase
+        .from("crm_client_activities")
+        .select("*")
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    if (clientsResult.error || activitiesResult.error) {
+      setState((prev) => ({ ...prev, hydrated: true, loading: false }));
+      return;
     }
-  }, []);
+
+    const clientsRows = (clientsResult.data ?? []) as DbClientRow[];
+    const activitiesRows = (activitiesResult.data ?? []) as DbActivityRow[];
+
+    const activityMap = new Map<string, DbActivityRow[]>();
+    for (const activity of activitiesRows) {
+      const items = activityMap.get(activity.client_id) ?? [];
+      items.push(activity);
+      activityMap.set(activity.client_id, items);
+    }
+
+    const clients = clientsRows.map((row) =>
+      mapDbClientToClient(row, activityMap.get(row.id) ?? [])
+    );
+
+    setState({ clients, hydrated: true, loading: false });
+  }, [supabase]);
 
   useEffect(() => {
-    if (!state.hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.clients));
-  }, [state.clients, state.hydrated]);
+    let mounted = true;
+    if (!mounted) return;
+    void reload();
 
-  const value = useMemo(() => ({ state, dispatch }), [state, dispatch]);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void reload();
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [reload, supabase.auth]);
+
+  const dispatch = useCallback(
+    async (action: ClientAction) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) return;
+
+      if (action.type === "hydrate") {
+        setState((prev) => ({
+          ...prev,
+          clients: action.payload,
+          hydrated: true,
+          loading: false,
+        }));
+        return;
+      }
+
+      if (action.type === "add_client") {
+        const now = new Date().toISOString();
+        const nextAction =
+          action.payload.nextAction?.trim() || defaultNextAction(action.payload.status);
+        const payload = mapClientInputToDbClient({
+          ...action.payload,
+          nextAction,
+          lastContactAt: action.payload.lastContactAt ?? now,
+        });
+
+        const { data: inserted, error: insertError } = await supabase
+          .from("crm_clients")
+          .insert({
+            owner_id: user.id,
+            ...payload,
+            message_template: getDefaultTemplateId(action.payload.status),
+          })
+          .select("id")
+          .single();
+
+        if (insertError || !inserted) return;
+
+        await supabase.from("crm_client_activities").insert({
+          owner_id: user.id,
+          client_id: inserted.id,
+          type: "sample_sent",
+          action: "Клиент добавлен",
+          result: "Воронка и первое касание инициализированы.",
+          created_at: now,
+        });
+
+        await reload();
+        return;
+      }
+
+      if (action.type === "update_client") {
+        const updates = action.payload.updates;
+        const dbUpdates: Record<string, unknown> = {};
+
+        if (typeof updates.name === "string") dbUpdates.name = updates.name;
+        if (typeof updates.companyName === "string") dbUpdates.company = updates.companyName;
+        if (typeof updates.whatsappNumber === "string")
+          dbUpdates.phone = updates.whatsappNumber;
+        if (typeof updates.email === "string") dbUpdates.email = updates.email || null;
+        if (typeof updates.city === "string") dbUpdates.city = updates.city || null;
+        if (typeof updates.segment === "string") dbUpdates.segment = updates.segment || null;
+        if (typeof updates.product === "string") dbUpdates.product = updates.product || null;
+        if (typeof updates.status === "string") dbUpdates.status = updates.status;
+        if (typeof updates.priority === "string") dbUpdates.priority = updates.priority;
+        if (typeof updates.assignedTo === "string")
+          dbUpdates.assigned_to = updates.assignedTo || null;
+        if (typeof updates.sampleSentDate === "string")
+          dbUpdates.sample_sent_date = updates.sampleSentDate.slice(0, 10);
+        if (typeof updates.followUpDate === "string")
+          dbUpdates.next_follow_up_date = updates.followUpDate.slice(0, 10);
+        if (typeof updates.nextAction === "string")
+          dbUpdates.next_action = updates.nextAction || null;
+        if (typeof updates.estimatedMonthlyValue === "number")
+          dbUpdates.potential_kzt = updates.estimatedMonthlyValue;
+        if (typeof updates.notes === "string") dbUpdates.notes = updates.notes || null;
+        if (typeof updates.lastContactAt === "string")
+          dbUpdates.last_contact_at = updates.lastContactAt;
+        if (typeof updates.messageTemplate === "string")
+          dbUpdates.message_template = updates.messageTemplate;
+
+        if (Object.keys(dbUpdates).length === 0) return;
+
+        await supabase
+          .from("crm_clients")
+          .update(dbUpdates)
+          .eq("id", action.payload.id)
+          .eq("owner_id", user.id);
+
+        await reload();
+        return;
+      }
+
+      if (action.type === "add_history_event") {
+        await supabase.from("crm_client_activities").insert({
+          owner_id: user.id,
+          client_id: action.payload.clientId,
+          type: action.payload.event.type,
+          action: action.payload.event.title,
+          result: action.payload.event.description ?? null,
+          created_at: action.payload.event.date ?? new Date().toISOString(),
+        });
+
+        await supabase
+          .from("crm_clients")
+          .update({
+            last_contact_at: action.payload.event.date ?? new Date().toISOString(),
+          })
+          .eq("id", action.payload.clientId)
+          .eq("owner_id", user.id);
+
+        await reload();
+      }
+    },
+    [reload, supabase]
+  );
+
+  const value = useMemo(() => ({ state, dispatch, reload }), [state, dispatch, reload]);
 
   return <ClientStoreContext.Provider value={value}>{children}</ClientStoreContext.Provider>;
 }

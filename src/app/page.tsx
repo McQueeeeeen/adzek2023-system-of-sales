@@ -14,7 +14,12 @@ import { useState } from "react";
 import { useClientStore } from "@/components/providers/client-store-provider";
 import { ClientStatusBadge } from "@/components/clients/client-status-badge";
 import { getDashboardMetrics, getFollowUpBuckets } from "@/lib/client-selectors";
-import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDate,
+  HIGH_VALUE_THRESHOLD_KZT,
+  STATUS_LABELS,
+} from "@/lib/format";
 import { buildTemplateMessage, buildWhatsappLink } from "@/lib/whatsapp-templates";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -160,7 +165,7 @@ function FollowUpColumn({
               <div className="mt-3">
                 <span
                   className={`rounded-md px-2 py-1 text-[11px] font-semibold ${
-                    client.estimatedMonthlyValue >= 3000
+                    client.estimatedMonthlyValue >= HIGH_VALUE_THRESHOLD_KZT
                       ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
                       : "bg-slate-100 text-slate-700"
                   }`}
@@ -201,7 +206,7 @@ function FollowUpColumn({
 
 export default function DashboardPage() {
   const {
-    state: { clients },
+    state: { clients, loading },
   } = useClientStore();
   const [isSendingTelegram, setIsSendingTelegram] = useState(false);
   const [telegramToast, setTelegramToast] = useState<{
@@ -234,8 +239,15 @@ export default function DashboardPage() {
         body: JSON.stringify({ clients }),
       });
 
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
+
       if (!response.ok) {
-        throw new Error("Не удалось отправить дайджест в Telegram.");
+        throw new Error(
+          payload?.error?.trim() ||
+            `Ошибка отправки в Telegram (HTTP ${response.status}).`
+        );
       }
 
       setTelegramToast({
@@ -257,6 +269,13 @@ export default function DashboardPage() {
 
   return (
     <div className="page-stack">
+      {loading ? (
+        <Card>
+          <CardContent className="py-10 text-sm text-slate-600">
+            Загружаем данные CRM...
+          </CardContent>
+        </Card>
+      ) : null}
       <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="page-header">
           <h2 className="page-title">Панель управления</h2>
@@ -383,7 +402,10 @@ export default function DashboardPage() {
               <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">1. Закройте все просроченные касания.</div>
               <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">2. Выполните касания на сегодня.</div>
               <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">3. Обновите следующее действие по каждому активному клиенту.</div>
-              <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">4. Сконцентрируйтесь на лидах с высоким потенциалом (от $3,000).</div>
+              <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+                4. Сконцентрируйтесь на лидах с высоким потенциалом (от{" "}
+                {formatCurrency(HIGH_VALUE_THRESHOLD_KZT)}).
+              </div>
             </CardContent>
           </Card>
         </div>

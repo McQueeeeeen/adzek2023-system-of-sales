@@ -14,8 +14,7 @@ declare
     'public.crm_profiles',
     'public.crm_clients',
     'public.crm_client_activities',
-    'public.crm_whatsapp_templates',
-    'public.ai_message_generations'
+    'public.crm_whatsapp_templates'
   ];
 begin
   foreach tbl in array tables_to_grant

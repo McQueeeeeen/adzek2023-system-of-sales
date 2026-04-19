@@ -13,7 +13,6 @@ import { useEffect, useMemo, useState } from "react";
 import { ClientPriorityBadge } from "@/components/clients/client-priority-badge";
 import { ClientStatusBadge } from "@/components/clients/client-status-badge";
 import { ClientTimeline } from "@/components/clients/client-timeline";
-import { AiWhatsappMessageEngine } from "@/components/clients/ai-whatsapp-message-engine";
 import { useClientStore } from "@/components/providers/client-store-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,7 +45,6 @@ import {
   ClientStatus,
 } from "@/types/client";
 import { WhatsappTemplate } from "@/types/whatsapp-template";
-import { defaultAiOptionsByStatus } from "@/lib/ai/whatsapp-message";
 
 function offsetIsoDate(days: number) {
   const date = new Date();
@@ -557,11 +555,6 @@ export default function ClientDetailPage() {
           </CardContent>
         </Card>
       </section>
-
-      <AiWhatsappMessageEngine
-        client={currentClient}
-        defaultOptions={defaultAiOptionsByStatus(currentClient.status)}
-      />
 
       <Card>
         <CardHeader>

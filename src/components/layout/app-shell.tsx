@@ -22,6 +22,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isAuthPage = pathname === "/login" || pathname === "/signup";
 
   useEffect(() => {
+    if (!supabase) {
+      setUserEmail("");
+      return;
+    }
+
     let active = true;
     void supabase.auth.getUser().then(({ data }) => {
       if (!active) return;
@@ -39,7 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       active = false;
       subscription.unsubscribe();
     };
-  }, [supabase.auth]);
+  }, [supabase]);
 
   function isActiveLink(href: string) {
     if (href === "/") return pathname === "/";
@@ -54,6 +59,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   async function handleLogout() {
+    if (!supabase) {
+      window.location.href = "/login";
+      return;
+    }
     await supabase.auth.signOut();
     window.location.href = "/login";
   }

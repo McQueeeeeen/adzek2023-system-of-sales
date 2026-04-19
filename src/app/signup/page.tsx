@@ -19,6 +19,10 @@ export default function SignupPage() {
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!supabase) {
+      setError("Не настроены переменные Supabase. Проверьте env в Vercel.");
+      return;
+    }
     setLoading(true);
     setError("");
     setSuccess("");

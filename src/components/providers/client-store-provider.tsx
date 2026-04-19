@@ -99,6 +99,11 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const reload = useCallback(async () => {
+    if (!supabase) {
+      setState({ clients: [], hydrated: true, loading: false });
+      return;
+    }
+
     setState((prev) => ({ ...prev, loading: true }));
 
     const {
@@ -147,6 +152,11 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
   }, [supabase]);
 
   useEffect(() => {
+    if (!supabase) {
+      setState({ clients: [], hydrated: true, loading: false });
+      return;
+    }
+
     let mounted = true;
     if (!mounted) return;
     void reload();
@@ -161,10 +171,12 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [reload, supabase.auth]);
+  }, [reload, supabase]);
 
   const dispatch = useCallback(
     async (action: ClientAction) => {
+      if (!supabase) return;
+
       const {
         data: { user },
       } = await supabase.auth.getUser();

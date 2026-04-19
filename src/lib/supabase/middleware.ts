@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getSupabasePublicConfig } from "@/lib/supabase/config";
 
 const PROTECTED_ROUTES = ["/", "/clients", "/settings"];
 const AUTH_ROUTES = ["/login", "/signup"];
@@ -16,8 +17,7 @@ function isAuthPath(pathname: string) {
 }
 
 export async function updateSession(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const { url, key } = getSupabasePublicConfig();
 
   if (!url || !key) {
     return NextResponse.next({

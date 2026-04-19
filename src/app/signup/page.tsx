@@ -19,16 +19,20 @@ export default function SignupPage() {
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
     if (!supabase) {
       setError("Не настроены переменные Supabase. Проверьте env в Vercel.");
       return;
     }
+
     setLoading(true);
     setError("");
     setSuccess("");
 
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: email.trim(),
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: normalizedEmail,
       password,
       options: {
         data: {
@@ -37,16 +41,32 @@ export default function SignupPage() {
       },
     });
 
-    setLoading(false);
     if (signUpError) {
+      setLoading(false);
       setError("Не удалось создать аккаунт. Проверьте данные и повторите.");
       return;
     }
 
-    setSuccess("Аккаунт создан. Теперь войдите в систему.");
-    setTimeout(() => {
-      window.location.href = "/login";
-    }, 1200);
+    if (signUpData.session) {
+      window.location.href = "/";
+      return;
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+
+    setLoading(false);
+
+    if (!signInError) {
+      window.location.href = "/";
+      return;
+    }
+
+    setSuccess(
+      "Аккаунт создан. Подтвердите email (если включено подтверждение) и войдите в систему."
+    );
   }
 
   return (
@@ -65,7 +85,7 @@ export default function SignupPage() {
               id="fullName"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Emin"
+              placeholder="Эмин"
               required
             />
           </div>
@@ -117,3 +137,4 @@ export default function SignupPage() {
     </Card>
   );
 }
+

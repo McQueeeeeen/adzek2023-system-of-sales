@@ -1,4 +1,9 @@
-﻿import { Client, ClientStatus, MessageTemplateId } from "@/types/client";
+import {
+  Client,
+  ClientStatus,
+  MESSAGE_TEMPLATE_IDS,
+  MessageTemplateId,
+} from "@/types/client";
 
 type TemplateBuilder = (client: Pick<Client, "name" | "companyName" | "product">) => string;
 
@@ -70,7 +75,19 @@ export function buildTemplateMessage(
   return TEMPLATE_BUILDERS[templateId](client);
 }
 
+export function getLegacyTemplateOptions(
+  client: Pick<Client, "name" | "companyName" | "product">
+) {
+  return MESSAGE_TEMPLATE_IDS.map((id) => ({
+    id,
+    title: WHATSAPP_TEMPLATE_LABELS[id],
+    body: buildTemplateMessage(id, client),
+    category: "legacy" as const,
+  }));
+}
+
 export function buildWhatsappLink(phone: string, text: string) {
   const cleaned = phone.replace(/[^\d]/g, "");
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(text)}`;
 }
+

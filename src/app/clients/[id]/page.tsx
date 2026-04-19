@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getClientById } from "@/lib/client-selectors";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   formatCurrency,
   formatDate,
@@ -26,17 +27,24 @@ import {
   STATUS_LABELS,
 } from "@/lib/format";
 import {
-  buildTemplateMessage,
   buildWhatsappLink,
-  getDefaultTemplateId,
-  WHATSAPP_TEMPLATE_LABELS,
+  getLegacyTemplateOptions,
 } from "@/lib/whatsapp-templates";
+import { renderWhatsappTemplate } from "@/lib/whatsapp/render-template";
+import { getRecommendedCategoriesByStatus } from "@/lib/whatsapp/template-categories";
+import {
+  buildClientTemplateVariables,
+  WHATSAPP_VARIABLE_HELP,
+} from "@/lib/whatsapp/template-variables";
+import {
+  DbWhatsappTemplateRow,
+  mapDbWhatsappTemplateToModel,
+} from "@/lib/whatsapp/template-mappers";
 import {
   CLIENT_STATUSES,
-  MESSAGE_TEMPLATE_IDS,
   ClientStatus,
-  MessageTemplateId,
 } from "@/types/client";
+import { WhatsappTemplate } from "@/types/whatsapp-template";
 
 function offsetIsoDate(days: number) {
   const date = new Date();
@@ -68,22 +76,92 @@ function defaultNextAction(status: ClientStatus) {
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const { state, dispatch } = useClientStore();
   const { loading, hydrated } = state;
   const client = useMemo(() => getClientById(state.clients, id), [state.clients, id]);
 
   const [noteDraft, setNoteDraft] = useState("");
   const [nextActionDraft, setNextActionDraft] = useState(client?.nextAction ?? "");
-  const [templateDraft, setTemplateDraft] = useState<MessageTemplateId>(
-    client?.messageTemplate ?? "first_followup"
-  );
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [customTemplates, setCustomTemplates] = useState<WhatsappTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [templatesError, setTemplatesError] = useState("");
 
   useEffect(() => {
     if (client) {
       setNextActionDraft(client.nextAction);
-      setTemplateDraft(client.messageTemplate);
     }
   }, [client]);
+
+  useEffect(() => {
+    async function loadWhatsappTemplates() {
+      if (!supabase) {
+        setTemplatesError("Supabase не настроен.");
+        setLoadingTemplates(false);
+        return;
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setLoadingTemplates(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("crm_whatsapp_templates")
+        .select("*")
+        .eq("owner_id", user.id)
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        setTemplatesError(error.message);
+        setLoadingTemplates(false);
+        return;
+      }
+
+      const mapped = ((data ?? []) as DbWhatsappTemplateRow[]).map(
+        mapDbWhatsappTemplateToModel
+      );
+      setCustomTemplates(mapped);
+      setLoadingTemplates(false);
+    }
+
+    void loadWhatsappTemplates();
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!client || selectedTemplateId) return;
+
+    const recommendedCategories = getRecommendedCategoriesByStatus(client.status);
+    const recommendedFromCustom = customTemplates.find((template) =>
+      recommendedCategories.includes(template.category)
+    );
+
+    if (recommendedFromCustom) {
+      setSelectedTemplateId(recommendedFromCustom.id);
+      return;
+    }
+
+    if (client.messageTemplate) {
+      setSelectedTemplateId(client.messageTemplate);
+      return;
+    }
+
+    const legacyFirst = getLegacyTemplateOptions({
+      name: client.name,
+      companyName: client.companyName,
+      product: client.product,
+    })[0];
+
+    if (legacyFirst) {
+      setSelectedTemplateId(legacyFirst.id);
+    }
+  }, [client, customTemplates, selectedTemplateId]);
 
   if (loading && !hydrated) {
     return (
@@ -109,12 +187,29 @@ export default function ClientDetailPage() {
   }
 
   const currentClient = client;
-
-  const templateMessage = buildTemplateMessage(templateDraft, {
+  const legacyTemplates = getLegacyTemplateOptions({
     name: currentClient.name,
     companyName: currentClient.companyName,
     product: currentClient.product,
   });
+  const recommendedCategories = getRecommendedCategoriesByStatus(currentClient.status);
+
+  const recommendedTemplates = customTemplates
+    .filter((template) => recommendedCategories.includes(template.category))
+    .slice(0, 3);
+
+  const selectedTemplate =
+    customTemplates.find((template) => template.id === selectedTemplateId) ?? null;
+
+  const selectedLegacyTemplate =
+    legacyTemplates.find((template) => template.id === selectedTemplateId) ?? null;
+
+  const templateMessage = selectedTemplate
+    ? renderWhatsappTemplate(
+        selectedTemplate.body,
+        buildClientTemplateVariables(currentClient)
+      )
+    : selectedLegacyTemplate?.body ?? legacyTemplates[0]?.body ?? "";
 
   const whatsappHref = buildWhatsappLink(currentClient.whatsappNumber, templateMessage);
 
@@ -122,8 +217,6 @@ export default function ClientDetailPage() {
     if (nextStatus === currentClient.status) return;
 
     const suggestedAction = defaultNextAction(nextStatus);
-    const nextTemplate = getDefaultTemplateId(nextStatus);
-
     await dispatch({
       type: "update_client",
       payload: {
@@ -131,7 +224,6 @@ export default function ClientDetailPage() {
         updates: {
           status: nextStatus,
           nextAction: suggestedAction,
-          messageTemplate: nextTemplate,
         },
       },
     });
@@ -149,7 +241,6 @@ export default function ClientDetailPage() {
     });
 
     setNextActionDraft(suggestedAction);
-    setTemplateDraft(nextTemplate);
   }
 
   async function scheduleFollowUp(days: number, label: string) {
@@ -200,31 +291,6 @@ export default function ClientDetailPage() {
     });
   }
 
-  async function saveTemplate(templateId: MessageTemplateId) {
-    setTemplateDraft(templateId);
-    if (templateId === currentClient.messageTemplate) return;
-
-    await dispatch({
-      type: "update_client",
-      payload: {
-        id: currentClient.id,
-        updates: { messageTemplate: templateId },
-      },
-    });
-
-    await dispatch({
-      type: "add_history_event",
-      payload: {
-        clientId: currentClient.id,
-        event: {
-          type: "note",
-          title: "Обновлен шаблон WhatsApp",
-          description: WHATSAPP_TEMPLATE_LABELS[templateId],
-        },
-      },
-    });
-  }
-
   async function addTouchpoint() {
     const note = noteDraft.trim();
     if (!note) return;
@@ -245,6 +311,11 @@ export default function ClientDetailPage() {
   }
 
   async function sendWhatsappTemplate() {
+    const templateLabel =
+      selectedTemplate?.title ??
+      selectedLegacyTemplate?.title ??
+      "Произвольный текст";
+
     await dispatch({
       type: "add_history_event",
       payload: {
@@ -252,7 +323,7 @@ export default function ClientDetailPage() {
         event: {
           type: "whatsapp_followup",
           title: "Отправлен шаблон WhatsApp",
-          description: WHATSAPP_TEMPLATE_LABELS[templateDraft],
+          description: templateLabel,
         },
       },
     });
@@ -399,17 +470,60 @@ export default function ClientDetailPage() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-800">Шаблон WhatsApp</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-slate-800">Шаблон WhatsApp</p>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/settings/whatsapp-templates">Управлять шаблонами</Link>
+                </Button>
+              </div>
+              {recommendedTemplates.length > 0 ? (
+                <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  {recommendedTemplates.map((template) => (
+                    <Button
+                      key={template.id}
+                      variant={
+                        selectedTemplateId === template.id ? "default" : "outline"
+                      }
+                      size="sm"
+                      onClick={() => setSelectedTemplateId(template.id)}
+                    >
+                      {template.title}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
               <Select
-                value={templateDraft}
-                onChange={(e) => void saveTemplate(e.target.value as MessageTemplateId)}
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
               >
-                {MESSAGE_TEMPLATE_IDS.map((templateId) => (
-                  <option key={templateId} value={templateId}>
-                    {WHATSAPP_TEMPLATE_LABELS[templateId]}
+                <option value="">Выберите шаблон</option>
+                {customTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.title}
+                  </option>
+                ))}
+                {legacyTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.title} (базовый)
                   </option>
                 ))}
               </Select>
+              {loadingTemplates ? (
+                <p className="text-xs text-slate-500">Загружаем пользовательские шаблоны...</p>
+              ) : null}
+              {templatesError ? (
+                <p className="text-xs text-rose-700">{templatesError}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-1">
+                {WHATSAPP_VARIABLE_HELP.map((item) => (
+                  <span
+                    key={item.key}
+                    className="rounded-md bg-slate-100 px-2 py-1 text-[11px] text-slate-600"
+                  >
+                    {`{${item.key}}`}
+                  </span>
+                ))}
+              </div>
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Предпросмотр</p>
                 <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{templateMessage}</p>

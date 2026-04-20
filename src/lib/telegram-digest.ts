@@ -9,7 +9,7 @@ export type WhatsappDigestItem = {
   waUrl: string;
 };
 
-export const KZ_TIMEZONE = process.env.KZ_TIMEZONE || "Asia/Almaty";
+export const KZ_TIMEZONE = process.env.KZ_TIMEZONE ?? "Asia/Almaty";
 const MAX_CLIENTS_PER_BLOCK = Number(process.env.TELEGRAM_BLOCK_LIMIT || "5");
 const UPCOMING_LIMIT = 2;
 

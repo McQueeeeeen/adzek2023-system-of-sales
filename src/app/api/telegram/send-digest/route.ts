@@ -3,7 +3,9 @@ import { MOCK_CLIENTS } from "@/lib/mock-data";
 import { mapDbClientToClient, type DbActivityRow, type DbClientRow } from "@/lib/crm-mappers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { formatTelegramDigest, splitTelegramMessage, type WhatsappDigestItem } from "@/lib/telegram-digest";
+import { formatTelegramDigest, splitTelegramMessage, KZ_TIMEZONE, type WhatsappDigestItem } from "@/lib/telegram-digest";
+import { getDateKeyInTimezone } from "@/lib/client-selectors";
+import { renderWhatsappTemplate } from "@/lib/whatsapp/render-template";
 import { Client } from "@/types/client";
 
 type DbTemplateRow = {
@@ -12,12 +14,6 @@ type DbTemplateRow = {
   title: string;
   body: string;
 };
-
-const KZ_TZ = process.env.KZ_TIMEZONE || "Asia/Almaty";
-
-function todayKeyInTz(timeZone: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
 
 function daysSince(dateStr: string | null): number {
   if (!dateStr) return 0;
@@ -31,16 +27,6 @@ function templateCategory(row: DbClientRow): string {
   if (d <= 9) return "overdue_followup";
   if (d <= 13) return "push";
   return "final_message";
-}
-
-function renderBody(body: string, row: DbClientRow): string {
-  const vars: Record<string, string> = {
-    client_name: row.name || "Клиент",
-    company: row.company || "Компания",
-    product: row.product || "",
-    next_action: row.next_action || "",
-  };
-  return body.replace(/\[([a-z0-9_]+)\]/gi, (_, k: string) => vars[k.toLowerCase()] ?? `[${k}]`);
 }
 
 function buildWaUrl(phone: string, text: string): string {
@@ -75,7 +61,13 @@ async function loadWhatsappItems(actionableRows: DbClientRow[]): Promise<Whatsap
     if (!row.phone) continue;
     const tpl = tplMap.get(row.owner_id)?.get(templateCategory(row));
     if (!tpl) continue;
-    const waUrl = buildWaUrl(row.phone, renderBody(tpl.body, row));
+    const rendered = renderWhatsappTemplate(tpl.body, {
+      client_name: row.name || "Клиент",
+      company: row.company || "Компания",
+      product: row.product || "",
+      next_action: row.next_action || "",
+    });
+    const waUrl = buildWaUrl(row.phone, rendered);
     if (!waUrl) continue;
     items.push({ name: row.name, companyName: row.company, templateTitle: tpl.title, waUrl });
   }
@@ -175,7 +167,7 @@ async function loadClientsFromSupabaseForDigest() {
 
   const clients = clientsRows.map((row) => mapDbClientToClient(row, activityMap.get(row.id) ?? []));
 
-  const todayKey = todayKeyInTz(KZ_TZ);
+  const todayKey = getDateKeyInTimezone(new Date(), KZ_TIMEZONE);
   const actionableRows = clientsRows.filter(
     (r) => r.next_follow_up_date && r.next_follow_up_date <= todayKey
   );

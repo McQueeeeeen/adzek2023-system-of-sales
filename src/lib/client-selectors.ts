@@ -1,6 +1,6 @@
 import { Client, ClientStatus } from "@/types/client";
 
-function getDateKeyInTimezone(date: Date, timeZone: string) {
+export function getDateKeyInTimezone(date: Date, timeZone: string) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",

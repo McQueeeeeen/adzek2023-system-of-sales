@@ -217,14 +217,14 @@ export default function DashboardPage() {
   const metrics = getDashboardMetrics(clients);
   const buckets = getFollowUpBuckets(clients);
 
-  const pipelineOrder: (keyof typeof STATUS_LABELS)[] = [
+  const pipelineOrder = [
     "new",
     "sample",
     "waiting-test",
     "interested",
     "negotiating",
     "won",
-  ];
+  ] as const satisfies readonly (keyof typeof STATUS_LABELS)[];
 
   const stageMeta: Record<
     (typeof pipelineOrder)[number],

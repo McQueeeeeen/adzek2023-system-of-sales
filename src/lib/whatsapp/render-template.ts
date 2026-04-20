@@ -4,9 +4,9 @@ export function renderWhatsappTemplate(
   body: string,
   variables: WhatsappTemplateVariables
 ) {
-  return body.replace(/\{([a-z0-9_]+)\}/gi, (_match, variableName: string) => {
+  return body.replace(/[\[{]([a-z0-9_]+)[\]}]/gi, (_match, variableName: string) => {
     const key = variableName.toLowerCase();
-    return variables[key] ?? `{${variableName}}`;
+    return variables[key] ?? _match;
   });
 }
 

@@ -3,8 +3,85 @@ import { MOCK_CLIENTS } from "@/lib/mock-data";
 import { mapDbClientToClient, type DbActivityRow, type DbClientRow } from "@/lib/crm-mappers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { formatTelegramDigest, splitTelegramMessage } from "@/lib/telegram-digest";
+import { formatTelegramDigest, splitTelegramMessage, type WhatsappDigestItem } from "@/lib/telegram-digest";
 import { Client } from "@/types/client";
+
+type DbTemplateRow = {
+  owner_id: string;
+  category: string;
+  title: string;
+  body: string;
+};
+
+const KZ_TZ = process.env.KZ_TIMEZONE || "Asia/Almaty";
+
+function todayKeyInTz(timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+function daysSince(dateStr: string | null): number {
+  if (!dateStr) return 0;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
+}
+
+function templateCategory(row: DbClientRow): string {
+  const d = daysSince(row.sample_sent_date);
+  if (d <= 3) return "first_followup";
+  if (d <= 6) return "after_sample";
+  if (d <= 9) return "overdue_followup";
+  if (d <= 13) return "push";
+  return "final_message";
+}
+
+function renderBody(body: string, row: DbClientRow): string {
+  const vars: Record<string, string> = {
+    client_name: row.name || "Клиент",
+    company: row.company || "Компания",
+    product: row.product || "",
+    next_action: row.next_action || "",
+  };
+  return body.replace(/\[([a-z0-9_]+)\]/gi, (_, k: string) => vars[k.toLowerCase()] ?? `[${k}]`);
+}
+
+function buildWaUrl(phone: string, text: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return "";
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+}
+
+async function loadWhatsappItems(actionableRows: DbClientRow[]): Promise<WhatsappDigestItem[]> {
+  if (!actionableRows.length) return [];
+
+  const supabase = createSupabaseAdminClient();
+  const ownerIds = Array.from(new Set(actionableRows.map((r) => r.owner_id)));
+
+  const { data: templates } = await supabase
+    .from("crm_whatsapp_templates")
+    .select("owner_id, category, title, body")
+    .in("owner_id", ownerIds)
+    .eq("is_active", true);
+
+  if (!templates?.length) return [];
+
+  const tplMap = new Map<string, Map<string, DbTemplateRow>>();
+  for (const t of templates as DbTemplateRow[]) {
+    if (!tplMap.has(t.owner_id)) tplMap.set(t.owner_id, new Map());
+    const byCategory = tplMap.get(t.owner_id)!;
+    if (!byCategory.has(t.category)) byCategory.set(t.category, t);
+  }
+
+  const items: WhatsappDigestItem[] = [];
+  for (const row of actionableRows) {
+    if (!row.phone) continue;
+    const tpl = tplMap.get(row.owner_id)?.get(templateCategory(row));
+    if (!tpl) continue;
+    const waUrl = buildWaUrl(row.phone, renderBody(tpl.body, row));
+    if (!waUrl) continue;
+    items.push({ name: row.name, companyName: row.company, templateTitle: tpl.title, waUrl });
+  }
+
+  return items;
+}
 
 async function hasAccess(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -43,7 +120,7 @@ async function sendTelegramMessage(token: string, chatId: string, text: string) 
   }
 }
 
-async function sendDigest(clients: Client[]) {
+async function sendDigest(clients: Client[], whatsappItems: WhatsappDigestItem[] = []) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -51,7 +128,7 @@ async function sendDigest(clients: Client[]) {
     throw new Error("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID.");
   }
 
-  const digest = formatTelegramDigest(clients);
+  const digest = formatTelegramDigest(clients, { whatsappItems });
   const chunks = splitTelegramMessage(digest.text);
 
   for (const chunk of chunks) {
@@ -96,7 +173,14 @@ async function loadClientsFromSupabaseForDigest() {
     activityMap.set(activity.client_id, list);
   }
 
-  return clientsRows.map((row) => mapDbClientToClient(row, activityMap.get(row.id) ?? []));
+  const clients = clientsRows.map((row) => mapDbClientToClient(row, activityMap.get(row.id) ?? []));
+
+  const todayKey = todayKeyInTz(KZ_TZ);
+  const actionableRows = clientsRows.filter(
+    (r) => r.next_follow_up_date && r.next_follow_up_date <= todayKey
+  );
+
+  return { clients, actionableRows };
 }
 
 export async function GET(request: NextRequest) {
@@ -105,8 +189,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const clients = await loadClientsFromSupabaseForDigest();
-    const result = await sendDigest(clients);
+    const { clients, actionableRows } = await loadClientsFromSupabaseForDigest();
+    const whatsappItems = await loadWhatsappItems(actionableRows);
+    const result = await sendDigest(clients, whatsappItems);
     return NextResponse.json({ ok: true, mode: "cron", ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -121,11 +206,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json().catch(() => ({}))) as { clients?: Client[] };
-    const clients =
-      Array.isArray(body.clients) && body.clients.length > 0
-        ? body.clients
-        : await loadClientsFromSupabaseForDigest().catch(() => MOCK_CLIENTS);
-    const result = await sendDigest(clients);
+
+    if (Array.isArray(body.clients) && body.clients.length > 0) {
+      const result = await sendDigest(body.clients);
+      return NextResponse.json({ ok: true, mode: "manual", ...result });
+    }
+
+    const { clients, actionableRows } = await loadClientsFromSupabaseForDigest().catch(() => ({
+      clients: MOCK_CLIENTS,
+      actionableRows: [] as DbClientRow[],
+    }));
+    const whatsappItems = await loadWhatsappItems(actionableRows);
+    const result = await sendDigest(clients, whatsappItems);
 
     return NextResponse.json({ ok: true, mode: "manual", ...result });
   } catch (error) {

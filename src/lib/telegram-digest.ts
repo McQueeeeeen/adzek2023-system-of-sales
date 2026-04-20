@@ -2,6 +2,13 @@ import { getFollowUpBucketsInTimezone } from "@/lib/client-selectors";
 import { formatKzt, HIGH_VALUE_THRESHOLD_KZT, STATUS_LABELS } from "@/lib/format";
 import { Client } from "@/types/client";
 
+export type WhatsappDigestItem = {
+  name: string;
+  companyName: string;
+  templateTitle: string;
+  waUrl: string;
+};
+
 export const KZ_TIMEZONE = process.env.KZ_TIMEZONE || "Asia/Almaty";
 const MAX_CLIENTS_PER_BLOCK = Number(process.env.TELEGRAM_BLOCK_LIMIT || "5");
 const UPCOMING_LIMIT = 2;
@@ -136,15 +143,31 @@ function getFocusLine(overdue: Client[], dueToday: Client[]) {
   return "Продвинуть клиентов по воронке сегодня";
 }
 
+function formatWhatsappSection(items: WhatsappDigestItem[], limit = 5): string[] {
+  const sliced = items.slice(0, limit);
+  const lines = [`<b>📱 WhatsApp сегодня (${items.length})</b>`];
+
+  sliced.forEach((item, i) => {
+    lines.push(`— <b>${escapeHtml(item.name)} | ${escapeHtml(item.companyName)}</b>`);
+    lines.push(escapeHtml(item.templateTitle));
+    lines.push(`<a href="${item.waUrl}">Написать ↗</a>`);
+    if (i < sliced.length - 1) lines.push("");
+  });
+
+  return lines;
+}
+
 export function formatTelegramDigest(
   clients: Client[],
   options?: {
     timeZone?: string;
     maxPerBlock?: number;
+    whatsappItems?: WhatsappDigestItem[];
   }
 ) {
   const timeZone = options?.timeZone || KZ_TIMEZONE;
   const maxPerBlock = options?.maxPerBlock || MAX_CLIENTS_PER_BLOCK;
+  const whatsappItems = options?.whatsappItems ?? [];
   const { overdue, dueToday, upcoming } = getFollowUpBucketsInTimezone(clients, timeZone);
 
   if (overdue.length === 0 && dueToday.length === 0 && upcoming.length === 0) {
@@ -185,6 +208,7 @@ export function formatTelegramDigest(
       UPCOMING_LIMIT
     ),
     "",
+    ...(whatsappItems.length > 0 ? [...formatWhatsappSection(whatsappItems), ""] : []),
     "<b>💰 Итого потенциал:</b>",
     formatKzt(totalPotentialKzt),
     "",

@@ -8,6 +8,7 @@ import { ClientPriorityBadge } from "@/components/clients/client-priority-badge"
 import { ClientStatusBadge } from "@/components/clients/client-status-badge";
 import { useClientStore } from "@/components/providers/client-store-provider";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -47,9 +48,8 @@ function isOverdue(dateString: string) {
 
 export default function ClientsPage() {
   const router = useRouter();
-  const {
-    state: { clients, loading },
-  } = useClientStore();
+  const { state, loadMore } = useClientStore();
+  const { clients, loading, hydrated, hasMore, totalCount } = state;
 
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | ClientStatus>("all");
@@ -120,13 +120,23 @@ export default function ClientsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          {loading ? (
-            <p className="pb-4 text-sm text-slate-600">Загружаем клиентов...</p>
-          ) : null}
+          {loading && !hydrated ? (
+            <div className="space-y-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="h-10 w-1/4" />
+                  <Skeleton className="h-10 w-1/4" />
+                  <Skeleton className="h-10 w-1/6" />
+                  <Skeleton className="h-10 w-1/6" />
+                </div>
+              ))}
+            </div>
+          ) : (
+          <>
           <Table className="[&_th]:h-auto [&_th]:px-4 [&_th]:py-4 [&_td]:px-4 [&_td]:py-4">
             <TableHeader>
               <TableRow>
-                <TableHead>Имя</TableHead>
+                <TableHead>Клиенты ({totalCount})</TableHead>
                 <TableHead>Компания</TableHead>
                 <TableHead>Телефон</TableHead>
                 <TableHead>Продукт</TableHead>
@@ -225,6 +235,18 @@ export default function ClientsPage() {
               })}
             </TableBody>
           </Table>
+          {hasMore && (
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={loadMore}
+                className="rounded-lg border border-slate-200 bg-white px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Загрузить ещё
+              </button>
+            </div>
+          )}
+          </>
+          )}
         </CardContent>
       </Card>
     </div>

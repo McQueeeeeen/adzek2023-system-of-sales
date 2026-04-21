@@ -288,6 +288,43 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
           .eq("id", action.payload.clientId)
           .eq("owner_id", user.id);
 
+        // Auto-advance to next follow-up step
+        if (action.payload.event.type === "whatsapp_followup") {
+          const { data: clientRow } = await supabase
+            .from("crm_clients")
+            .select("sample_sent_date")
+            .eq("id", action.payload.clientId)
+            .eq("owner_id", user.id)
+            .single();
+
+          if (clientRow?.sample_sent_date) {
+            const STEPS = [
+              { dayOffset: 2,  nextAction: "Уточнить по результату теста" },
+              { dayOffset: 5,  nextAction: "Сравнить с текущим поставщиком — подвести к решению" },
+              { dayOffset: 8,  nextAction: "Предложить тестовую поставку на небольшой объём" },
+              { dayOffset: 10, nextAction: "Согласовать условия и зафиксировать первую поставку" },
+              { dayOffset: 14, nextAction: "Закрыть цикл или запланировать повторный контакт" },
+            ] as const;
+
+            const sample = new Date(clientRow.sample_sent_date);
+            const daysSince = Math.floor((Date.now() - sample.getTime()) / 86_400_000);
+            const nextStep = STEPS.find((s) => s.dayOffset > daysSince);
+
+            if (nextStep) {
+              const nextDate = new Date(sample);
+              nextDate.setDate(nextDate.getDate() + nextStep.dayOffset);
+              await supabase
+                .from("crm_clients")
+                .update({
+                  next_follow_up_date: nextDate.toISOString().slice(0, 10),
+                  next_action: nextStep.nextAction,
+                })
+                .eq("id", action.payload.clientId)
+                .eq("owner_id", user.id);
+            }
+          }
+        }
+
         await reload();
       }
     },

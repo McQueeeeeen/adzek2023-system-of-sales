@@ -56,7 +56,7 @@ export function ClientForm({ initialClient, onSubmit, submitLabel, mode = "full"
       product: initialClient?.product ?? "",
       status: initialClient?.status ?? "new",
       priority: initialClient?.priority ?? "medium",
-      assignedTo: initialClient?.assignedTo ?? "Ayan",
+      assignedTo: initialClient?.assignedTo ?? "",
       sampleSentDate: initialClient
         ? toDateInput(initialClient.sampleSentDate)
         : toDateInput(new Date().toISOString()),
@@ -73,7 +73,12 @@ export function ClientForm({ initialClient, onSubmit, submitLabel, mode = "full"
 
   const [form, setForm] = useState<FormState>(initialState);
 
-  const canSubmit = form.companyName.trim().length > 1 && form.whatsappNumber.trim().length > 6;
+  const canSubmit =
+    form.companyName.trim().length > 1 &&
+    form.whatsappNumber.trim().length > 6 &&
+    form.assignedTo.trim().length > 0 &&
+    form.followUpDate.trim().length > 0 &&
+    form.nextAction.trim().length > 0;
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -81,6 +86,17 @@ export function ClientForm({ initialClient, onSubmit, submitLabel, mode = "full"
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (
+      !form.companyName.trim() ||
+      !form.whatsappNumber.trim() ||
+      !form.assignedTo.trim() ||
+      !form.followUpDate ||
+      !form.nextAction.trim()
+    ) {
+      alert("Заполните обязательные поля: Компания, Телефон, Ответственный, Следующее касание, Следующее действие.");
+      return;
+    }
 
     const isQuickMode = mode === "quick";
     const normalizedName = form.name.trim();
@@ -214,7 +230,7 @@ export function ClientForm({ initialClient, onSubmit, submitLabel, mode = "full"
           </div>
           <div className="space-y-2">
             <Label htmlFor="assignedTo">Ответственный</Label>
-            <Input id="assignedTo" value={form.assignedTo} onChange={(e) => update("assignedTo", e.target.value)} placeholder="Ayan" />
+            <Input id="assignedTo" value={form.assignedTo} onChange={(e) => update("assignedTo", e.target.value)} placeholder="Имя и фамилия" required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="sampleSentDate">Дата пробника</Label>
@@ -222,7 +238,7 @@ export function ClientForm({ initialClient, onSubmit, submitLabel, mode = "full"
           </div>
           <div className="space-y-2">
             <Label htmlFor="followUpDate">Следующее касание</Label>
-            <Input id="followUpDate" type="date" value={form.followUpDate} onChange={(e) => update("followUpDate", e.target.value)} />
+            <Input id="followUpDate" type="date" value={form.followUpDate} onChange={(e) => update("followUpDate", e.target.value)} required />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="nextAction">Следующее действие</Label>
@@ -231,6 +247,7 @@ export function ClientForm({ initialClient, onSubmit, submitLabel, mode = "full"
               value={form.nextAction}
               onChange={(e) => update("nextAction", e.target.value)}
               placeholder="Например: запросить результат теста"
+              required
             />
             <p className="text-xs text-slate-500">
               Один конкретный шаг, который двигает клиента вперед.

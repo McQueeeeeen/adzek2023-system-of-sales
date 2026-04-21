@@ -10,6 +10,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ClientPriorityBadge } from "@/components/clients/client-priority-badge";
 import { ClientStatusBadge } from "@/components/clients/client-status-badge";
 import { ClientTimeline } from "@/components/clients/client-timeline";
@@ -19,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getClientById } from "@/lib/client-selectors";
+import { mapDbActivityToClientEvent } from "@/lib/crm-mappers";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   formatCurrency,
@@ -42,6 +44,7 @@ import {
 } from "@/lib/whatsapp/template-mappers";
 import {
   CLIENT_STATUSES,
+  ClientHistoryEvent,
   ClientStatus,
 } from "@/types/client";
 import { WhatsappTemplate } from "@/types/whatsapp-template";
@@ -81,6 +84,7 @@ export default function ClientDetailPage() {
   const { loading, hydrated } = state;
   const client = useMemo(() => getClientById(state.clients, id), [state.clients, id]);
 
+  const [activities, setActivities] = useState<ClientHistoryEvent[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [nextActionDraft, setNextActionDraft] = useState(client?.nextAction ?? "");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -93,6 +97,18 @@ export default function ClientDetailPage() {
       setNextActionDraft(client.nextAction);
     }
   }, [client]);
+
+  useEffect(() => {
+    if (!supabase || !id) return;
+    supabase
+      .from("crm_client_activities")
+      .select("*")
+      .eq("client_id", id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setActivities(data.map(mapDbActivityToClientEvent));
+      });
+  }, [supabase, id, state.clients]);
 
   useEffect(() => {
     async function loadWhatsappTemplates() {
@@ -165,11 +181,25 @@ export default function ClientDetailPage() {
 
   if (loading && !hydrated) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-sm text-slate-600">Загружаем карточку клиента...</p>
-        </CardContent>
-      </Card>
+      <div className="page-stack">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-6 w-full" />
+            ))}
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -561,7 +591,7 @@ export default function ClientDetailPage() {
           <CardTitle>Лента действий</CardTitle>
         </CardHeader>
         <CardContent className="pt-2">
-          <ClientTimeline events={currentClient.history} />
+          <ClientTimeline events={activities} />
         </CardContent>
       </Card>
     </div>

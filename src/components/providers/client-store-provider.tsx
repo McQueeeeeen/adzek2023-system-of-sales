@@ -11,7 +11,6 @@ import {
 } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
-  DbActivityRow,
   DbClientRow,
   mapClientInputToDbClient,
   mapDbClientToClient,
@@ -19,10 +18,14 @@ import {
 import { getDefaultTemplateId } from "@/lib/whatsapp-templates";
 import { Client, ClientHistoryEvent, ClientInput } from "@/types/client";
 
+const PAGE_SIZE = 30;
+
 type ClientState = {
   clients: Client[];
   hydrated: boolean;
   loading: boolean;
+  hasMore: boolean;
+  totalCount: number;
 };
 
 type AddClientAction = {
@@ -63,6 +66,7 @@ type ClientStoreContextValue = {
   state: ClientState;
   dispatch: (action: ClientAction) => Promise<void>;
   reload: () => Promise<void>;
+  loadMore: () => Promise<void>;
 };
 
 const ClientStoreContext = createContext<ClientStoreContextValue | null>(null);
@@ -71,6 +75,8 @@ const INITIAL_STATE: ClientState = {
   clients: [],
   hydrated: false,
   loading: true,
+  hasMore: false,
+  totalCount: 0,
 };
 
 function defaultNextAction(status: Client["status"]) {
@@ -100,7 +106,7 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
 
   const reload = useCallback(async () => {
     if (!supabase) {
-      setState({ clients: [], hydrated: true, loading: false });
+      setState({ clients: [], hydrated: true, loading: false, hasMore: false, totalCount: 0 });
       return;
     }
 
@@ -112,48 +118,32 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      setState({ clients: [], hydrated: true, loading: false });
+      setState({ clients: [], hydrated: true, loading: false, hasMore: false, totalCount: 0 });
       return;
     }
 
-    const [clientsResult, activitiesResult] = await Promise.all([
-      supabase
-        .from("crm_clients")
-        .select("*")
-        .eq("owner_id", user.id)
-        .order("next_follow_up_date", { ascending: true }),
-      supabase
-        .from("crm_client_activities")
-        .select("*")
-        .eq("owner_id", user.id)
-        .order("created_at", { ascending: false }),
-    ]);
+    const clientsResult = await supabase
+      .from("crm_clients")
+      .select("*", { count: "exact" })
+      .eq("owner_id", user.id)
+      .order("next_follow_up_date", { ascending: true })
+      .range(0, PAGE_SIZE - 1);
 
-    if (clientsResult.error || activitiesResult.error) {
+    if (clientsResult.error) {
       setState((prev) => ({ ...prev, hydrated: true, loading: false }));
       return;
     }
 
     const clientsRows = (clientsResult.data ?? []) as DbClientRow[];
-    const activitiesRows = (activitiesResult.data ?? []) as DbActivityRow[];
+    const clients = clientsRows.map((row) => mapDbClientToClient(row, []));
+    const total = clientsResult.count ?? 0;
 
-    const activityMap = new Map<string, DbActivityRow[]>();
-    for (const activity of activitiesRows) {
-      const items = activityMap.get(activity.client_id) ?? [];
-      items.push(activity);
-      activityMap.set(activity.client_id, items);
-    }
-
-    const clients = clientsRows.map((row) =>
-      mapDbClientToClient(row, activityMap.get(row.id) ?? [])
-    );
-
-    setState({ clients, hydrated: true, loading: false });
+    setState({ clients, hydrated: true, loading: false, hasMore: total > PAGE_SIZE, totalCount: total });
   }, [supabase]);
 
   useEffect(() => {
     if (!supabase) {
-      setState({ clients: [], hydrated: true, loading: false });
+      setState({ clients: [], hydrated: true, loading: false, hasMore: false, totalCount: 0 });
       return;
     }
 
@@ -331,7 +321,27 @@ export function ClientStoreProvider({ children }: { children: ReactNode }) {
     [reload, supabase]
   );
 
-  const value = useMemo(() => ({ state, dispatch, reload }), [state, dispatch, reload]);
+  const loadMore = useCallback(async () => {
+    if (!supabase) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const offset = state.clients.length;
+    const { data } = await supabase
+      .from("crm_clients")
+      .select("*")
+      .eq("owner_id", user.id)
+      .order("next_follow_up_date", { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (!data?.length) return;
+    const newClients = (data as DbClientRow[]).map((row) => mapDbClientToClient(row, []));
+    setState((prev) => ({
+      ...prev,
+      clients: [...prev.clients, ...newClients],
+      hasMore: prev.clients.length + newClients.length < prev.totalCount,
+    }));
+  }, [supabase, state.clients.length]);
+
+  const value = useMemo(() => ({ state, dispatch, reload, loadMore }), [state, dispatch, reload, loadMore]);
 
   return <ClientStoreContext.Provider value={value}>{children}</ClientStoreContext.Provider>;
 }
